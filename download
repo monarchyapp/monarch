@@ -1,0 +1,186 @@
+import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAppStore } from "@/stores/appStore";
+import { usePortfolio, useTransactions } from "@/hooks/usePortfolio";
+import { useNavigate } from "react-router-dom";
+import confetti from "canvas-confetti";
+import { Target, CheckCircle2, ChevronRight, Shield, Coins, BookOpen, Trophy, Sparkles, Zap } from "lucide-react";
+
+const ease = [0.16, 1, 0.3, 1] as const;
+const fadeUp = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.5, ease } } };
+
+function getMissions(tokens: any[], totalValue: number, txCount: number) {
+  const stables = ["USDC", "USDT", "PYUSD", "USDH"];
+  const hasStable = tokens.some(t => stables.includes(t.symbol?.toUpperCase()));
+  const topPct = tokens.length > 0 ? Math.max(...tokens.map(t => (t.usdValue || 0) / (totalValue || 1) * 100)) : 100;
+
+  return [
+    { id: "scan", label: "Scan your wallet", why: "See how safe your crypto really is", done: totalValue > 0, xp: 10, icon: Target, color: "from-primary to-[hsl(var(--chart-orange-light))]" },
+    { id: "review", label: "Review your health score", why: "Understanding is the first step", done: totalValue > 0, xp: 15, icon: Shield, color: "from-[hsl(var(--chart-blue))] to-[hsl(var(--chart-purple))]" },
+    { id: "stable", label: "Add a stablecoin buffer", why: "Hold 10–20% in USDC for safety", done: hasStable, xp: 25, icon: Coins, color: "from-[hsl(var(--chart-green))] to-[hsl(var(--chart-cyan))]" },
+    { id: "diversify", label: "Hold 3+ different tokens", why: "Spread risk across assets", done: tokens.length >= 3, xp: 25, icon: Sparkles, color: "from-[hsl(var(--chart-purple))] to-[hsl(var(--chart-blue))]" },
+    { id: "concentration", label: "Reduce top token below 50%", why: `Top is ${topPct.toFixed(0)}% — high exposure`, done: topPct < 50, xp: 30, icon: Target, color: "from-[hsl(var(--chart-red))] to-[hsl(var(--chart-orange))]" },
+    { id: "learn", label: "Complete a crypto lesson", why: "Knowledge is your best defense", done: false, xp: 20, icon: BookOpen, color: "from-[hsl(var(--chart-orange))] to-primary" },
+  ];
+}
+
+function getLevel(xp: number) {
+  if (xp >= 100) return { level: 4, title: "Portfolio Pro", next: null };
+  if (xp >= 60) return { level: 3, title: "Smart Investor", next: 100 };
+  if (xp >= 25) return { level: 2, title: "Learner", next: 60 };
+  return { level: 1, title: "Beginner", next: 25 };
+}
+
+export default function Plan() {
+  const navigate = useNavigate();
+  const { activeWalletAddress } = useAppStore();
+  const { data: portfolio } = usePortfolio(activeWalletAddress);
+  const { data: txData } = useTransactions(activeWalletAddress);
+  const [completed, setCompleted] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("monarch-missions") || "[]"); } catch { return []; }
+  });
+
+  const tokens = portfolio?.tokens || [];
+  const totalVal = portfolio?.totalValue || 0;
+  const txCount = Array.isArray(txData) ? txData.length : 0;
+  const missions = useMemo(() => getMissions(tokens, totalVal, txCount), [tokens, totalVal, txCount]);
+
+  const complete = (id: string) => {
+    if (!completed.includes(id)) {
+      const u = [...completed, id];
+      setCompleted(u);
+      localStorage.setItem("monarch-missions", JSON.stringify(u));
+      confetti({ particleCount: 60, spread: 50, origin: { y: 0.5 }, colors: ["#f97316", "#fbbf24", "#22c55e"] });
+    }
+  };
+
+  const all = missions.map(m => ({ ...m, done: m.done || completed.includes(m.id) }));
+  const doneCount = all.filter(m => m.done).length;
+  const totalXP = all.filter(m => m.done).reduce((s, m) => s + m.xp, 0);
+  const lvl = getLevel(totalXP);
+
+  if (!activeWalletAddress) {
+    return (
+      <div className="page-container min-h-[60vh] flex items-center justify-center">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-sm space-y-4">
+          <div className="w-14 h-14 rounded-xl monarch-gradient flex items-center justify-center mx-auto shadow-lg shadow-primary/15">
+            <Target className="w-7 h-7 text-primary-foreground" />
+          </div>
+          <h3 className="text-lg font-extrabold text-foreground">Your Fix-It Plan</h3>
+          <p className="text-sm text-muted-foreground">Scan a wallet to get personalized missions.</p>
+          <button onClick={() => navigate("/dashboard")} className="px-5 py-2.5 rounded-full monarch-gradient text-primary-foreground text-sm font-bold btn-magnetic">Check Health</button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page-container max-w-2xl mx-auto">
+      <motion.div initial="hidden" animate="show" variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } }} className="space-y-6">
+
+        <motion.div variants={fadeUp}>
+          <h1 className="text-lg font-extrabold text-foreground">Fix-It Plan</h1>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Complete missions to level up</p>
+        </motion.div>
+
+        {/* Level card */}
+        <motion.div variants={fadeUp} className="glass-card p-5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-28 h-28 opacity-[0.02]" style={{ background: "radial-gradient(circle, hsl(28 100% 55%), transparent 60%)" }} />
+          <div className="flex items-center justify-between mb-4 relative">
+            <div className="flex items-center gap-3">
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", bounce: 0.5, delay: 0.3 }}
+                className="w-12 h-12 rounded-xl monarch-gradient flex items-center justify-center shadow-lg shadow-primary/15">
+                <Trophy className="w-6 h-6 text-primary-foreground" />
+              </motion.div>
+              <div>
+                <p className="text-base font-extrabold text-foreground">Level {lvl.level}</p>
+                <p className="text-[11px] text-muted-foreground">{lvl.title}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <motion.p className="text-xl font-extrabold text-primary" style={{ letterSpacing: "-0.04em" }}
+                initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", bounce: 0.4, delay: 0.5 }}>
+                {totalXP} XP
+              </motion.p>
+              <p className="text-[9px] text-muted-foreground">{doneCount}/{all.length} complete</p>
+            </div>
+          </div>
+          {lvl.next && (
+            <div className="space-y-1.5 relative">
+              <div className="flex justify-between text-[9px] text-muted-foreground font-medium">
+                <span>Lvl {lvl.level}</span><span>Lvl {lvl.level + 1} · {lvl.next} XP</span>
+              </div>
+              <div className="h-2 bg-muted/6 rounded-full overflow-hidden">
+                <motion.div className="h-full rounded-full monarch-gradient" initial={{ width: 0 }}
+                  animate={{ width: `${(totalXP / lvl.next) * 100}%` }} transition={{ duration: 1, delay: 0.3, ease }} />
+              </div>
+            </div>
+          )}
+          {!lvl.next && <p className="text-[12px] text-primary font-semibold relative">Max level. You're a pro.</p>}
+        </motion.div>
+
+        {/* Timeline */}
+        <motion.div variants={fadeUp} className="relative">
+          <div className="absolute left-[23px] top-0 bottom-0 w-[2px] rounded-full overflow-hidden">
+            <motion.div className="w-full glow-path" initial={{ height: "0%" }}
+              animate={{ height: `${(doneCount / all.length) * 100}%` }} transition={{ duration: 1.5, delay: 0.5, ease }} />
+            <div className="absolute inset-0 bg-muted/4" style={{ zIndex: -1 }} />
+          </div>
+
+          <div className="space-y-2">
+            {all.map((m, i) => (
+              <motion.div key={m.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05, duration: 0.4, ease }} className="relative flex gap-3 pl-0.5">
+                <div className="relative z-10 flex-shrink-0 mt-3.5">
+                  {m.done ? (
+                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", bounce: 0.5, delay: 0.2 + i * 0.04 }}
+                      className="w-[46px] h-[46px] flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-xl bg-[hsl(var(--chart-green))]/8 border-2 border-[hsl(var(--chart-green))]/15 flex items-center justify-center">
+                        <CheckCircle2 className="w-5 h-5 text-[hsl(var(--chart-green))]" />
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <div className="w-[46px] h-[46px] flex items-center justify-center">
+                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${m.color} flex items-center justify-center shadow-md`}>
+                        <m.icon className="w-4 h-4 text-white" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className={`flex-1 glass-card p-3.5 transition-all ${m.done ? "opacity-45" : "hover:border-primary/8"}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <p className={`text-[13px] font-bold ${m.done ? "text-muted-foreground line-through" : "text-foreground"}`}>{m.label}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{m.why}</p>
+                    </div>
+                    <span className="text-[10px] font-bold text-primary/50 bg-primary/5 px-2 py-0.5 rounded-md flex-shrink-0">+{m.xp} XP</span>
+                  </div>
+                  {!m.done && (
+                    <motion.button onClick={() => complete(m.id)} whileTap={{ scale: 0.97 }}
+                      className="mt-2.5 w-full py-2 rounded-lg monarch-gradient text-primary-foreground text-[12px] font-bold btn-magnetic">
+                      Complete Mission
+                    </motion.button>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Learn CTA */}
+        <motion.div variants={fadeUp}>
+          <button onClick={() => navigate("/learn")} className="w-full glass-card p-4 flex items-center gap-3 hover:border-primary/8 transition-all group">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[hsl(var(--chart-orange))] to-primary flex items-center justify-center shadow-md flex-shrink-0">
+              <Zap className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-[13px] font-bold text-foreground">Level up faster</p>
+              <p className="text-[11px] text-muted-foreground">Complete lessons to earn more XP</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
+          </button>
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+}

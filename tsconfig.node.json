@@ -1,0 +1,7 @@
+project_id = "lbwjvhbakugulunzwhtq"
+
+[functions.helius-proxy]
+verify_jwt = false
+
+[functions.crypto-wizard]
+verify_jwt = false

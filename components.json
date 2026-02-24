@@ -1,0 +1,194 @@
+import { motion, AnimatePresence } from "framer-motion";
+import { useAppStore } from "@/stores/appStore";
+import { usePortfolio } from "@/hooks/usePortfolio";
+import { useState, useMemo } from "react";
+import { Search, Coins, Filter, ExternalLink, X, AlertTriangle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+const ease = [0.16, 1, 0.3, 1] as const;
+const fadeUp = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.5, ease } } };
+
+function Sparkline({ color = "hsl(var(--chart-green))" }: { color?: string }) {
+  const pts = useMemo(() => {
+    const p: string[] = [];
+    let y = 14 + Math.random() * 8;
+    for (let i = 0; i < 20; i++) { y = Math.max(4, Math.min(26, y + (Math.random() - 0.48) * 3.5)); p.push(`${i * 3},${y}`); }
+    return p.join(" ");
+  }, []);
+  return (
+    <svg width="56" height="28" viewBox="0 0 60 30" className="flex-shrink-0">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="sparkline-draw" />
+    </svg>
+  );
+}
+
+export default function Tokens() {
+  const navigate = useNavigate();
+  const { activeWalletAddress, hideBalances } = useAppStore();
+  const { data: portfolio, isLoading } = usePortfolio(activeWalletAddress);
+  const [search, setSearch] = useState("");
+  const [hideDust, setHideDust] = useState(false);
+  const [selectedMint, setSelectedMint] = useState<string | null>(null);
+
+  const mask = (v: string) => hideBalances ? "••••" : v;
+  const allTokens = portfolio?.tokens || [];
+  const totalValue = portfolio?.totalValue || 0;
+
+  const filtered = allTokens
+    .filter((t: any) => !hideDust || (t.usdValue || 0) >= 1)
+    .filter((t: any) => !search || t.symbol?.toLowerCase().includes(search.toLowerCase()) || t.name?.toLowerCase().includes(search.toLowerCase()));
+
+  const selectedToken = allTokens.find((t: any) => t.mint === selectedMint);
+
+  if (!activeWalletAddress) {
+    return (
+      <div className="page-container min-h-[60vh] flex items-center justify-center">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-sm space-y-4">
+          <div className="w-12 h-12 rounded-xl bg-muted/10 flex items-center justify-center mx-auto"><Coins className="w-5 h-5 text-muted-foreground" /></div>
+          <h3 className="text-lg font-extrabold text-foreground">Your Portfolio</h3>
+          <p className="text-sm text-muted-foreground">Scan a wallet to see what you own.</p>
+          <button onClick={() => navigate("/dashboard")} className="px-5 py-2.5 rounded-full monarch-gradient text-primary-foreground text-sm font-bold btn-magnetic">Check Health</button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="page-container max-w-2xl mx-auto space-y-3">
+        <div className="skeleton h-9 w-full rounded-full" />
+        {[1,2,3,4].map(i => <div key={i} className="skeleton h-16 w-full rounded-xl" />)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="page-container max-w-2xl mx-auto">
+      <motion.div initial="hidden" animate="show" variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.04 } } }} className="space-y-5">
+
+        <motion.div variants={fadeUp}>
+          <h1 className="text-lg font-extrabold text-foreground">Portfolio</h1>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{allTokens.length} tokens · {mask(`$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}`)}</p>
+        </motion.div>
+
+        {/* Search */}
+        <motion.div variants={fadeUp} className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/30" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tokens..."
+              className="w-full pl-9 pr-3 py-2.5 rounded-full bg-card/40 text-sm text-foreground placeholder:text-muted-foreground/25 border border-border/15 outline-none focus:ring-1 focus:ring-primary/10 transition-all backdrop-blur-sm" />
+          </div>
+          <button onClick={() => setHideDust(!hideDust)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-full text-[11px] font-semibold transition-all ${hideDust ? "bg-primary/8 text-primary border border-primary/12" : "bg-card/40 text-muted-foreground border border-border/15"}`}>
+            <Filter className="w-3 h-3" /> Dust
+          </button>
+        </motion.div>
+
+        {/* Token list */}
+        <motion.div variants={fadeUp} className="space-y-1">
+          {filtered.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">No tokens found.</div>}
+          {filtered.map((token: any, i: number) => {
+            const pct = totalValue > 0 ? ((token.usdValue || 0) / totalValue * 100) : 0;
+            const rc = pct > 50 ? "hsl(var(--chart-red))" : pct > 20 ? "hsl(var(--chart-orange))" : "hsl(var(--chart-green))";
+            const rl = pct > 50 ? "High" : pct > 20 ? "Med" : "Low";
+            const isDust = (token.usdValue || 0) < 1;
+
+            return (
+              <motion.button key={token.mint} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
+                onClick={() => setSelectedMint(selectedMint === token.mint ? null : token.mint)}
+                className={`w-full glass-card p-3.5 flex items-center gap-3.5 text-left hover:border-border/30 transition-all duration-200 ${isDust ? "opacity-35" : ""}`}>
+                <div className="relative w-10 h-10 flex-shrink-0">
+                  <motion.div className="absolute inset-0 rounded-xl" style={{ border: `1.5px solid ${rc}`, opacity: 0.15 }}
+                    animate={pct > 50 ? { opacity: [0.1, 0.3, 0.1] } : {}} transition={pct > 50 ? { repeat: Infinity, duration: 2 } : {}} />
+                  <div className="absolute inset-0.5 rounded-[9px] bg-muted/8 flex items-center justify-center overflow-hidden">
+                    {token.logoURI ? <img src={token.logoURI} alt="" className="w-full h-full object-cover" /> : <span className="text-[10px] font-bold text-muted-foreground">{token.symbol?.[0]}</span>}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-bold text-foreground">{token.symbol}</span>
+                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md" style={{ color: rc, background: `color-mix(in srgb, ${rc} 8%, transparent)` }}>{rl}</span>
+                  </div>
+                  <p className="text-[9px] text-muted-foreground mt-0.5 truncate">{token.name}</p>
+                </div>
+                <Sparkline color={rc} />
+                <div className="text-right flex-shrink-0">
+                  <p className="text-[13px] font-bold text-foreground">{mask(`$${(token.usdValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`)}</p>
+                  <p className="text-[9px] text-muted-foreground">{pct.toFixed(1)}%</p>
+                </div>
+              </motion.button>
+            );
+          })}
+        </motion.div>
+      </motion.div>
+
+      {/* Token detail modal */}
+      <AnimatePresence>
+        {selectedToken && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-background/80 backdrop-blur-md z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setSelectedMint(null)}>
+            <motion.div initial={{ opacity: 0, y: 50, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 50 }}
+              transition={{ type: "spring", bounce: 0.12, duration: 0.5 }}
+              className="w-full max-w-md glass-card p-5 space-y-4 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+              {(() => {
+                const pct = totalValue > 0 ? ((selectedToken.usdValue || 0) / totalValue * 100) : 0;
+                const rc = pct > 50 ? "hsl(var(--chart-red))" : pct > 20 ? "hsl(var(--chart-orange))" : "hsl(var(--chart-green))";
+                return (
+                  <>
+                    <div className="absolute inset-0 rounded-2xl opacity-[0.03]" style={{ background: `radial-gradient(circle at 50% 0%, ${rc}, transparent 60%)` }} />
+                    <div className="relative flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-muted/8 flex items-center justify-center overflow-hidden">
+                          {selectedToken.logoURI ? <img src={selectedToken.logoURI} alt="" className="w-full h-full object-cover" /> : <span className="text-sm font-bold text-muted-foreground">{selectedToken.symbol?.[0]}</span>}
+                        </div>
+                        <div>
+                          <h3 className="text-base font-extrabold text-foreground">{selectedToken.symbol}</h3>
+                          <p className="text-[11px] text-muted-foreground">{selectedToken.name}</p>
+                        </div>
+                      </div>
+                      <button onClick={() => setSelectedMint(null)} className="p-2 rounded-lg hover:bg-muted/8 transition-colors"><X className="w-4 h-4 text-muted-foreground" /></button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {[
+                        { l: "Value", v: mask(`$${(selectedToken.usdValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`) },
+                        { l: "Share", v: `${pct.toFixed(1)}%` },
+                        { l: "Price", v: mask(`$${(selectedToken.pricePerToken || 0) < 0.01 ? (selectedToken.pricePerToken || 0).toFixed(7) : (selectedToken.pricePerToken || 0).toFixed(4)}`) },
+                        { l: "Risk", v: pct > 50 ? "High" : pct > 20 ? "Medium" : "Low" },
+                      ].map((d, i) => (
+                        <div key={i} className="glass-surface p-3 rounded-lg">
+                          <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider">{d.l}</p>
+                          <p className="text-base font-extrabold text-foreground mt-0.5">{d.v}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider">Exposure</p>
+                      <div className="h-2 bg-muted/6 rounded-full overflow-hidden">
+                        <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(pct, 100)}%` }} transition={{ duration: 0.8, ease }}
+                          className="h-full rounded-full" style={{ background: rc }} />
+                      </div>
+                    </div>
+                    {pct > 30 && (
+                      <div className="p-3 rounded-lg bg-destructive/4 border border-destructive/6">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-destructive mt-0.5 flex-shrink-0" />
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            {selectedToken.symbol} is {pct.toFixed(0)}% of your portfolio. A 50% drop means losing ~{(pct * 0.5).toFixed(0)}% total.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    <a href={`https://solscan.io/token/${selectedToken.mint}`} target="_blank" rel="noreferrer"
+                      className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-muted/6 text-[13px] font-semibold text-foreground hover:bg-muted/10 transition-colors">
+                      View on Explorer <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </>
+                );
+              })()}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

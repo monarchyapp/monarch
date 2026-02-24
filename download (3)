@@ -1,0 +1,82 @@
+import { motion } from "framer-motion";
+import { useAppStore } from "@/stores/appStore";
+import { Moon, Sun, Eye, EyeOff, Bell, Download, ChevronRight } from "lucide-react";
+
+function ToggleRow({ label, description, icon: Icon, checked, onChange }: { label: string; description: string; icon: any; checked: boolean; onChange: () => void }) {
+  return (
+    <div className="flex items-center justify-between py-2">
+      <div className="flex items-center gap-3">
+        <Icon className="w-5 h-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      <button onClick={onChange} className={`w-11 h-6 rounded-full transition-colors duration-200 relative ${checked ? "bg-primary" : "bg-muted"}`}>
+        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-foreground shadow-sm transition-transform duration-200 ${checked ? "translate-x-5 bg-primary-foreground" : "bg-secondary-foreground"}`} style={{ backgroundColor: checked ? 'white' : 'hsl(var(--muted-foreground))' }} />
+      </button>
+    </div>
+  );
+}
+
+export default function SettingsPage() {
+  const { hideBalances, setHideBalances, currency, setCurrency } = useAppStore();
+
+  return (
+    <div className="page-container">
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="space-y-6 max-w-2xl">
+        <h1 className="page-title">Settings</h1>
+
+        {/* Display */}
+        <div className="glass-card p-6 space-y-4">
+          <h3 className="section-title">Display</h3>
+          <ToggleRow
+            label="Hide Balances"
+            description="Mask all balance values"
+            icon={hideBalances ? EyeOff : Eye}
+            checked={hideBalances}
+            onChange={() => setHideBalances(!hideBalances)}
+          />
+        </div>
+
+        {/* Currency */}
+        <div className="glass-card p-6 space-y-4">
+          <h3 className="section-title">Currency</h3>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Display Currency</p>
+              <p className="text-xs text-muted-foreground">All values shown in selected currency</p>
+            </div>
+            <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="px-3 py-2 rounded-xl bg-muted/30 text-sm font-medium text-foreground border border-border/50 outline-none">
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="SOL">SOL (◎)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Notifications */}
+        <div className="glass-card p-6 space-y-4">
+          <h3 className="section-title">Notifications</h3>
+          <ToggleRow label="Transactions" description="Activity notifications" icon={Bell} checked={true} onChange={() => {}} />
+          <ToggleRow label="Price Alerts" description="Token price targets" icon={Bell} checked={false} onChange={() => {}} />
+        </div>
+
+        {/* Export */}
+        <div className="glass-card p-6">
+          <button className="w-full flex items-center justify-between group">
+            <div className="flex items-center gap-3">
+              <Download className="w-5 h-5 text-muted-foreground" />
+              <div className="text-left">
+                <p className="text-sm font-medium text-foreground">Export CSV</p>
+                <p className="text-xs text-muted-foreground">Download transaction history</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
